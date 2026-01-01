@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server';
+import { supabaseAdmin } from '@/lib/supabase';
+import { generateResponse } from '@/lib/anthropic';
+import { sendSms, validateWebhook } from '@/lib/surge';
+
+interface SurgeWebhookPayload {
+  id: string;
+  type: string;
+  data: {
+    id: string;
+    body: string;
+    direction: 'inbound' | 'outbound';
+    conversation: {
+      id: string;
+      contact: {
+        id: string;
+        phone_number: string;
+        first_name?: string;
+        last_name?: string;
+      };
+    };
+    created_at: string;
+  };
+}
+
+export async function POST(request: NextRequest) {
+  try {
+    const payload = await request.text();
+    const signature = request.headers.get('surge-signature') || '';
+
+    // Validate webhook signature
+    if (!validateWebhook(payload, signature)) {
+      console.error('Invalid webhook signature');
+      return NextResponse.json({ error: 'Invalid signature' }, { status: 401 });
+    }
+
+    const webhook: SurgeWebhookPayload = JSON.parse(payload);
+
+    // Only process inbound messages
+    if (webhook.data.direction !== 'inbound') {
+      return NextResponse.json({ ok: true });
+    }
+
+    const phoneNumber = webhook.data.conversation.contact.phone_number;
+    const messageBody = webhook.data.body;
+    const contactName = [
+      webhook.data.conversation.contact.first_name,
+      webhook.data.conversation.contact.last_name,
+    ]
+      .filter(Boolean)
+      .join(' ') || null;
+
+    console.log(`Received SMS from ${phoneNumber}: ${messageBody}`);
+
+    // Get or create user
+    let { data: user } = await supabaseAdmin
+      .from('planner_users')
+      .select('*')
+      .eq('phone_number', phoneNumber)
+      .single();
+
+    if (!user) {
+      const { data: newUser, error } = await supabaseAdmin
+        .from('planner_users')
+        .insert({
+          phone_number: phoneNumber,
+          name: contactName,
+          timezone: 'America/Chicago', // Default, can be updated later
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating user:', error);
+        return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
+      }
+      user = newUser;
+    }
+
+    // Save incoming message
+    await supabaseAdmin.from('planner_messages').insert({
+      user_id: user.id,
+      role: 'user',
+      content: messageBody,
+      surge_message_id: webhook.data.id,
+    });
+
+    // Get conversation history (last 20 messages)
+    const { data: history } = await supabaseAdmin
+      .from('planner_messages')
+      .select('role, content')
+      .eq('user_id', user.id)
+      .order('created_at', { ascending: false })
+      .limit(20);
+
+    const conversationHistory = (history || [])
+      .reverse()
+      .map((msg) => ({
+        role: msg.role as 'user' | 'assistant',
+        content: msg.content,
+      }));
+
+    // Generate AI response
+    const aiResponse = await generateResponse(messageBody, conversationHistory.slice(0, -1));
+
+    // Save AI response
+    await supabaseAdmin.from('planner_messages').insert({
+      user_id: user.id,
+      role: 'assistant',
+      content: aiResponse,
+    });
+
+    // Send SMS response
+    const smsResult = await sendSms({
+      to: phoneNumber,
+      body: aiResponse,
+    });
+
+    if (!smsResult.success) {
+      console.error('Failed to send SMS:', smsResult.error);
+    }
+
+    return NextResponse.json({ ok: true, messageId: smsResult.messageId });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 });
+  }
+}
