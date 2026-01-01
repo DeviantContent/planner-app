@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/supabase';
-import { generateResponse } from '@/lib/anthropic';
+import { invokeCoachingAgent } from '@/lib/langgraph';
 import { sendSms, validateWebhook } from '@/lib/surge';
 
 interface SurgeWebhookPayload {
@@ -112,8 +112,12 @@ export async function POST(request: NextRequest) {
         content: msg.content,
       }));
 
-    // Generate AI response
-    const aiResponse = await generateResponse(messageBody, conversationHistory.slice(0, -1));
+    // Generate AI response using LangGraph agent
+    const aiResponse = await invokeCoachingAgent(
+      user.id,
+      messageBody,
+      conversationHistory.slice(0, -1)
+    );
 
     // Save AI response
     await supabaseAdmin.from('planner_messages').insert({
