@@ -122,13 +122,25 @@ export async function invokeCoachingAgent(
   // Add the new user message
   messages.push(new HumanMessage(userMessage));
 
-  // Invoke the agent
-  const result = await coachingAgent.invoke({
-    messages,
-    userId,
-    currentPhase: 'gathering',
-    collectedInfo: {},
-  });
+  // Invoke the agent with tracing config
+  const result = await coachingAgent.invoke(
+    {
+      messages,
+      userId,
+      currentPhase: 'gathering',
+      collectedInfo: {},
+    },
+    {
+      configurable: {
+        thread_id: userId,
+      },
+      runName: 'coaching-agent',
+      metadata: {
+        userId,
+        messagePreview: userMessage.slice(0, 50),
+      },
+    }
+  );
 
   return result.response || 'I had trouble generating a response. Please try again.';
 }
