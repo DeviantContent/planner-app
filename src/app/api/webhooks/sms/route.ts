@@ -36,8 +36,12 @@ export async function POST(request: NextRequest) {
 
     const webhook: SurgeWebhookPayload = JSON.parse(payload);
 
-    // Only process inbound messages
-    if (webhook.data.direction !== 'inbound') {
+    // Log full payload for debugging
+    console.log('Surge webhook payload:', JSON.stringify(webhook, null, 2));
+
+    // Only process inbound messages (skip if direction is explicitly 'outbound')
+    if (webhook.data?.direction === 'outbound') {
+      console.log('Skipping outbound message');
       return NextResponse.json({ ok: true });
     }
 
