@@ -2,6 +2,7 @@ import { ChatAnthropic } from '@langchain/anthropic';
 import { HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
 import { StateGraph, END } from '@langchain/langgraph';
 import { ToolNode } from '@langchain/langgraph/prebuilt';
+import { traceable } from 'langsmith/traceable';
 import { CoachingState, CoachingStateType } from './state';
 import { coachingTools } from './tools';
 
@@ -107,40 +108,44 @@ const workflow = new StateGraph(CoachingState)
 export const coachingAgent = workflow.compile();
 
 // Helper function to invoke the agent with conversation history
-export async function invokeCoachingAgent(
-  userId: string,
-  userMessage: string,
-  conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
-): Promise<string> {
-  // Convert conversation history to LangChain messages
-  const messages = conversationHistory.map((msg) =>
-    msg.role === 'user'
-      ? new HumanMessage(msg.content)
-      : new AIMessage(msg.content)
-  );
+// Wrapped with traceable for LangSmith tracing
+export const invokeCoachingAgent = traceable(
+  async (
+    userId: string,
+    userMessage: string,
+    conversationHistory: Array<{ role: 'user' | 'assistant'; content: string }> = []
+  ): Promise<string> => {
+    // Convert conversation history to LangChain messages
+    const messages = conversationHistory.map((msg) =>
+      msg.role === 'user'
+        ? new HumanMessage(msg.content)
+        : new AIMessage(msg.content)
+    );
 
-  // Add the new user message
-  messages.push(new HumanMessage(userMessage));
+    // Add the new user message
+    messages.push(new HumanMessage(userMessage));
 
-  // Invoke the agent with tracing config
-  const result = await coachingAgent.invoke(
-    {
-      messages,
-      userId,
-      currentPhase: 'gathering',
-      collectedInfo: {},
-    },
-    {
-      configurable: {
-        thread_id: userId,
-      },
-      runName: 'coaching-agent',
-      metadata: {
+    // Invoke the agent with tracing config
+    const result = await coachingAgent.invoke(
+      {
+        messages,
         userId,
-        messagePreview: userMessage.slice(0, 50),
+        currentPhase: 'gathering',
+        collectedInfo: {},
       },
-    }
-  );
+      {
+        configurable: {
+          thread_id: userId,
+        },
+        runName: 'coaching-agent',
+        metadata: {
+          userId,
+          messagePreview: userMessage.slice(0, 50),
+        },
+      }
+    );
 
-  return result.response || 'I had trouble generating a response. Please try again.';
-}
+    return result.response || 'I had trouble generating a response. Please try again.';
+  },
+  { name: 'coaching-agent', run_type: 'chain' }
+);
