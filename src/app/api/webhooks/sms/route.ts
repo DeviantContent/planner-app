@@ -60,12 +60,14 @@ export async function POST(request: NextRequest) {
       .single();
 
     if (!user) {
+      // Create user record but don't approve them
       const { data: newUser, error } = await supabaseAdmin
         .from('planner_users')
         .insert({
           phone_number: phoneNumber,
           name: contactName,
-          timezone: 'America/Chicago', // Default, can be updated later
+          timezone: 'America/Chicago',
+          is_approved: false,
         })
         .select()
         .single();
@@ -75,6 +77,12 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Failed to create user' }, { status: 500 });
       }
       user = newUser;
+    }
+
+    // Check if user is approved - silently ignore non-approved users
+    if (!user.is_approved) {
+      console.log(`Unauthorized user attempted access: ${phoneNumber}`);
+      return NextResponse.json({ ok: true, unauthorized: true });
     }
 
     // Save incoming message

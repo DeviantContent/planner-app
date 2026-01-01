@@ -15,6 +15,7 @@ export interface Database {
           phone_number: string
           name: string | null
           timezone: string
+          is_approved: boolean
           created_at: string
           updated_at: string
         }
@@ -23,6 +24,7 @@ export interface Database {
           phone_number: string
           name?: string | null
           timezone?: string
+          is_approved?: boolean
           created_at?: string
           updated_at?: string
         }
@@ -31,6 +33,7 @@ export interface Database {
           phone_number?: string
           name?: string | null
           timezone?: string
+          is_approved?: boolean
           updated_at?: string
         }
         Relationships: []
