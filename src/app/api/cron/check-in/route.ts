@@ -67,23 +67,14 @@ export async function GET(request: NextRequest) {
       let message: string | null = null;
       let action = 'none';
 
-      // 5 PM - First reminder to plan tomorrow
-      if (userHour === 17 && !hasPlan) {
-        message = "Hey! It's 5 PM - perfect time to plan tomorrow. What's on your plate? 📋";
+      // This cron runs once daily at 11 PM UTC (5-6 PM US timezones)
+      // Send evening reminder if no plan for tomorrow
+      if (!hasPlan && userHour >= 17 && userHour <= 22) {
+        message = "Hey! Time to plan tomorrow. What are your top 3 priorities? I'll help build your schedule 📋";
         action = 'evening_reminder';
       }
-      // 8 PM - Urgent reminder if still no plan
-      else if (userHour === 20 && !hasPlan) {
-        message = "No plan for tomorrow yet! Let's lock in 3 goals and a schedule before bed. What's most important? 🎯";
-        action = 'urgent_reminder';
-      }
-      // 9 PM - Final warning
-      else if (userHour === 21 && !hasPlan) {
-        message = "Last call! Tomorrow needs a plan. Quick - what are your top 3 priorities? I'll build the schedule.";
-        action = 'final_reminder';
-      }
-      // 7 AM - Morning schedule delivery (if plan exists)
-      else if (userHour === 7 && hasPlan && hasSchedule) {
+      // Morning briefing if plan exists and it's morning in user's timezone
+      else if (hasPlan && hasSchedule && userHour >= 6 && userHour <= 8) {
         const goals = tomorrowPlan.goals as Array<{ title: string }>;
         const goalList = goals.slice(0, 3).map((g, i) => `${i + 1}. ${g.title}`).join('\n');
         message = `Good morning! Here's your plan:\n\n${goalList}\n\nLet's make it happen 💪`;
