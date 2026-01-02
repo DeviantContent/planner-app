@@ -56,6 +56,18 @@ export async function POST(request: NextRequest) {
 
     console.log(`Received SMS from ${phoneNumber}: ${messageBody}`);
 
+    // Deduplicate - check if we already processed this message
+    const { data: existingMsg } = await supabaseAdmin
+      .from('planner_messages')
+      .select('id')
+      .eq('surge_message_id', webhook.data.id)
+      .single();
+
+    if (existingMsg) {
+      console.log(`Duplicate webhook for message ${webhook.data.id}, skipping`);
+      return NextResponse.json({ ok: true, duplicate: true });
+    }
+
     // Get or create user
     let { data: user } = await supabaseAdmin
       .from('planner_users')
@@ -97,13 +109,13 @@ export async function POST(request: NextRequest) {
       surge_message_id: webhook.data.id,
     });
 
-    // Get conversation history (last 20 messages)
+    // Get conversation history (last 10 messages to reduce token usage)
     const { data: history } = await supabaseAdmin
       .from('planner_messages')
       .select('role, content')
       .eq('user_id', user.id)
       .order('created_at', { ascending: false })
-      .limit(20);
+      .limit(10);
 
     const conversationHistory = (history || [])
       .reverse()
@@ -113,12 +125,25 @@ export async function POST(request: NextRequest) {
       }));
 
     // Generate AI response using LangGraph agent
-    const aiResponse = await invokeCoachingAgent(
-      user.id,
-      messageBody,
-      conversationHistory.slice(0, -1),
-      user.timezone
-    );
+    let aiResponse: string;
+    try {
+      aiResponse = await invokeCoachingAgent(
+        user.id,
+        messageBody,
+        conversationHistory.slice(0, -1),
+        user.timezone
+      );
+    } catch (agentError: unknown) {
+      console.error('Agent error:', agentError);
+
+      // Check if it's a rate limit error
+      const errorMessage = agentError instanceof Error ? agentError.message : String(agentError);
+      if (errorMessage.includes('rate') || errorMessage.includes('429') || errorMessage.includes('MODEL_RATE_LIMIT')) {
+        aiResponse = "I'm getting rate limited - too many requests. Try again in about a minute!";
+      } else {
+        aiResponse = "Sorry, I hit an error processing that. Can you try again?";
+      }
+    }
 
     // Save AI response
     await supabaseAdmin.from('planner_messages').insert({

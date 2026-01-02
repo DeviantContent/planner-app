@@ -34,6 +34,7 @@ const modelWithTools = model.bindTools(coachingTools);
 
 // System prompt for the coaching agent
 const getSystemPrompt = (context: {
+  userId: string;
   timezone: string;
   currentTime: string;
   isEvening: boolean;
@@ -42,6 +43,8 @@ const getSystemPrompt = (context: {
   todaysPlan?: { goals: Array<{ title: string; completed: boolean }> } | null;
   tomorrowsPlan?: { goals: Array<{ title: string; completed: boolean }> } | null;
 }) => `You are a veteran, world-class life and CEO coach communicating via SMS. You bring decades of experience coaching high-performers, with a deep focus on mental health and work/life balance.
+
+USER ID (use this for all tool calls): ${context.userId}
 
 CURRENT CONTEXT:
 - Time: ${context.currentTime} (${context.timezone})
@@ -95,11 +98,13 @@ Example: If user says "I'm working on launching a new product, need to hire 2 en
 - Create project: "Hiring - 2 Engineers" with next steps
 - Create project: "Wedding Planning" with next steps
 
-SMS CONSTRAINTS:
+SMS CONSTRAINTS (CRITICAL):
 - Keep responses under 160 characters when possible
-- Ask ONE question at a time
+- Ask exactly ONE question at a time - NEVER ask multiple questions in a single message
 - Be direct and actionable
 - No fluff or lengthy explanations
+- End each message with a single, clear question OR a single action item
+- If you need multiple pieces of info, ask them in sequence across multiple messages
 
 COACHING APPROACH:
 - Reference their active projects when relevant
@@ -123,6 +128,7 @@ async function agentNode(state: CoachingStateType) {
   const systemPrompt = state.userContext
     ? getSystemPrompt(state.userContext)
     : getSystemPrompt({
+        userId: state.userId,
         timezone: 'America/Chicago',
         currentTime: new Date().toLocaleTimeString('en-US', { hour: 'numeric', minute: 'numeric', hour12: true }),
         isEvening: new Date().getHours() >= 17,
@@ -251,6 +257,7 @@ async function loadUserContext(userId: string, timezone: string): Promise<UserCo
     .single();
 
   return {
+    userId,
     timezone,
     currentTime,
     isEvening: hour >= 17,

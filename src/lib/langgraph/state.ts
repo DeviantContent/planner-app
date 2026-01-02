@@ -29,6 +29,7 @@ export interface CollectedInfo {
 
 // Context loaded at conversation start
 export interface UserContext {
+  userId: string;
   timezone: string;
   currentTime: string;
   isEvening: boolean;
