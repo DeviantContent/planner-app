@@ -116,7 +116,8 @@ export async function POST(request: NextRequest) {
     const aiResponse = await invokeCoachingAgent(
       user.id,
       messageBody,
-      conversationHistory.slice(0, -1)
+      conversationHistory.slice(0, -1),
+      user.timezone
     );
 
     // Save AI response

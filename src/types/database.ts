@@ -79,6 +79,8 @@ export interface Database {
           description: string | null
           status: 'active' | 'completed' | 'archived'
           due_date: string | null
+          priority: number
+          notes: string | null
           created_at: string
           updated_at: string
         }
@@ -89,6 +91,8 @@ export interface Database {
           description?: string | null
           status?: 'active' | 'completed' | 'archived'
           due_date?: string | null
+          priority?: number
+          notes?: string | null
           created_at?: string
           updated_at?: string
         }
@@ -97,6 +101,8 @@ export interface Database {
           description?: string | null
           status?: 'active' | 'completed' | 'archived'
           due_date?: string | null
+          priority?: number
+          notes?: string | null
           updated_at?: string
         }
         Relationships: [
@@ -151,6 +157,43 @@ export interface Database {
           }
         ]
       }
+      planner_daily_plans: {
+        Row: {
+          id: string
+          user_id: string
+          plan_date: string
+          goals: Json
+          schedule: Json
+          reflection: string | null
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          user_id: string
+          plan_date: string
+          goals?: Json
+          schedule?: Json
+          reflection?: string | null
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          plan_date?: string
+          goals?: Json
+          schedule?: Json
+          reflection?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planner_daily_plans_user_id_fkey"
+            columns: ["user_id"]
+            referencedRelation: "planner_users"
+            referencedColumns: ["id"]
+          }
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -171,3 +214,19 @@ export type PlannerUser = Database['public']['Tables']['planner_users']['Row']
 export type PlannerMessage = Database['public']['Tables']['planner_messages']['Row']
 export type PlannerGoal = Database['public']['Tables']['planner_goals']['Row']
 export type PlannerTask = Database['public']['Tables']['planner_tasks']['Row']
+export type PlannerDailyPlan = Database['public']['Tables']['planner_daily_plans']['Row']
+
+// Helper types for daily plan JSON fields
+export interface DailyGoal {
+  title: string
+  description?: string
+  project_id?: string
+  completed: boolean
+}
+
+export interface ScheduleBlock {
+  time: string        // e.g., "09:00"
+  duration: number    // in minutes
+  activity: string
+  goal_index?: number // which goal this relates to
+}

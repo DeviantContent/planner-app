@@ -27,6 +27,21 @@ export interface CollectedInfo {
   schedule?: ScheduleBlock[];
 }
 
+// Context loaded at conversation start
+export interface UserContext {
+  timezone: string;
+  currentTime: string;
+  isEvening: boolean;
+  shouldPlanTomorrow: boolean;
+  projects: Array<{
+    id: string;
+    title: string;
+    next_steps: Array<{ id: string; title: string }>;
+  }>;
+  todaysPlan: { goals: Array<{ title: string; completed: boolean }> } | null;
+  tomorrowsPlan: { goals: Array<{ title: string; completed: boolean }> } | null;
+}
+
 // Define the state schema using LangGraph's Annotation
 export const CoachingState = Annotation.Root({
   // Conversation messages
@@ -51,6 +66,12 @@ export const CoachingState = Annotation.Root({
   collectedInfo: Annotation<CollectedInfo>({
     reducer: (current, update) => ({ ...current, ...update }),
     default: () => ({}),
+  }),
+
+  // Context loaded at conversation start (projects, plans, time)
+  userContext: Annotation<UserContext | null>({
+    reducer: (_, update) => update,
+    default: () => null,
   }),
 
   // The final response to send via SMS
